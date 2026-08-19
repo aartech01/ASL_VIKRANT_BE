@@ -55,6 +55,30 @@ router.post("/", upload.single("photo"), async (req, res) => {
   }
 });
 
+// PATCH /api/photos/:publicId(*)  (JSON body: { area?, kind? }) — retag a photo.
+// Written straight to the database for the same reason as POST: a client's
+// general /api/state save can no longer carry photos edits (see /api/state).
+router.patch("/*", async (req, res) => {
+  try {
+    const publicId = req.params[0];
+    if (!publicId) return res.status(400).json({ error: "Missing photo id" });
+    const { area, kind } = req.body || {};
+    const doc = await Project.findById(PROJECT_ID);
+    const photo = doc && doc.state && Array.isArray(doc.state.photos)
+      ? doc.state.photos.find((p) => p.id === publicId)
+      : null;
+    if (!photo) return res.status(404).json({ error: "Photo not found" });
+    if (area !== undefined) photo.area = area;
+    if (kind !== undefined) photo.kind = kind;
+    doc.markModified("state.photos");
+    await doc.save();
+    res.json({ ok: true, photo });
+  } catch (err) {
+    console.error("PATCH /api/photos failed:", err.message);
+    res.status(500).json({ error: "Update failed: " + err.message });
+  }
+});
+
 // DELETE /api/photos/:publicId(*) — remove a photo from Cloudinary
 router.delete("/*", async (req, res) => {
   try {
