@@ -30,6 +30,7 @@ router.put("/", async (req, res) => {
     // that field — it always keeps whatever is already stored.
     const existing = await Project.findById(PROJECT_ID).lean();
     state.photos = (existing && existing.state && existing.state.photos) || [];
+    state.siteMap = (existing && existing.state && existing.state.siteMap) || null;
     const doc = await Project.findByIdAndUpdate(
       PROJECT_ID,
       { state, updatedBy: updatedBy || "" },

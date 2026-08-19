@@ -5,6 +5,7 @@ const morgan = require("morgan");
 const { connectDB } = require("./src/db");
 const stateRoutes = require("./src/routes/state");
 const photoRoutes = require("./src/routes/photos");
+const sitemapRoutes = require("./src/routes/sitemap");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -29,6 +30,7 @@ app.use(express.json({ limit: "5mb" }));
 app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 app.use("/api/state", stateRoutes);
 app.use("/api/photos", photoRoutes);
+app.use("/api/sitemap", sitemapRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
