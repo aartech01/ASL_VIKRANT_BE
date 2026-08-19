@@ -1,8 +1,8 @@
 const express = require("express");
 const Project = require("../models/Project");
+const { PROJECT_ID } = require("../constants");
 
 const router = express.Router();
-const PROJECT_ID = "vikrant-unit3";
 
 // GET /api/state — fetch the shared dashboard state
 router.get("/", async (req, res) => {
@@ -23,6 +23,13 @@ router.put("/", async (req, res) => {
     if (!state || typeof state !== "object") {
       return res.status(400).json({ error: "Body must include a 'state' object" });
     }
+    // Photos are added/removed only through /api/photos, which writes straight to
+    // the database. If a stale browser tab's full-state push were allowed to carry
+    // its own (possibly outdated) photos list, it could silently wipe out photos
+    // another session just uploaded. So this route never lets the client overwrite
+    // that field — it always keeps whatever is already stored.
+    const existing = await Project.findById(PROJECT_ID).lean();
+    state.photos = (existing && existing.state && existing.state.photos) || [];
     const doc = await Project.findByIdAndUpdate(
       PROJECT_ID,
       { state, updatedBy: updatedBy || "" },

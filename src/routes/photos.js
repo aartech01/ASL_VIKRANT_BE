@@ -2,6 +2,8 @@ const express = require("express");
 const multer = require("multer");
 const streamifier = require("streamifier");
 const cloudinary = require("../cloudinary");
+const Project = require("../models/Project");
+const { PROJECT_ID } = require("../constants");
 
 const router = express.Router();
 
@@ -36,6 +38,10 @@ router.post("/", upload.single("photo"), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded (field name must be 'photo')" });
     const area = req.body.area || "";
     const result = await uploadBufferToCloudinary(req.file.buffer, area);
+    const photo = { id: result.public_id, name: req.file.originalname || "photo.jpg", area, url: result.secure_url };
+    // Recorded straight to the database so the photo can never be lost to a
+    // racing full-state save from another tab (see /api/state for why).
+    await Project.findByIdAndUpdate(PROJECT_ID, { $push: { "state.photos": photo } }, { upsert: true });
     res.json({
       id: result.public_id,
       url: result.secure_url,
@@ -55,6 +61,7 @@ router.delete("/*", async (req, res) => {
     const publicId = req.params[0];
     if (!publicId) return res.status(400).json({ error: "Missing photo id" });
     await cloudinary.uploader.destroy(publicId);
+    await Project.findByIdAndUpdate(PROJECT_ID, { $pull: { "state.photos": { id: publicId } } });
     res.json({ ok: true });
   } catch (err) {
     console.error("DELETE /api/photos failed:", err.message);
