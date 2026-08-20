@@ -4,6 +4,7 @@ const streamifier = require("streamifier");
 const cloudinary = require("../cloudinary");
 const Project = require("../models/Project");
 const { PROJECT_ID } = require("../constants");
+const requireAdmin = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ function uploadBufferToCloudinary(buffer) {
 }
 
 // POST /api/sitemap  (multipart/form-data: map=<file>) — replaces the current site map
-router.post("/", upload.single("map"), async (req, res) => {
+router.post("/", requireAdmin, upload.single("map"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded (field name must be 'map')" });
     const result = await uploadBufferToCloudinary(req.file.buffer);
@@ -52,7 +53,7 @@ router.post("/", upload.single("map"), async (req, res) => {
 });
 
 // DELETE /api/sitemap — remove the current site map
-router.delete("/", async (req, res) => {
+router.delete("/", requireAdmin, async (req, res) => {
   try {
     const doc = await Project.findById(PROJECT_ID).lean();
     const current = doc && doc.state && doc.state.siteMap;

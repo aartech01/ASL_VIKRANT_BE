@@ -4,6 +4,7 @@ const streamifier = require("streamifier");
 const cloudinary = require("../cloudinary");
 const Project = require("../models/Project");
 const { PROJECT_ID } = require("../constants");
+const requireAdmin = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ function uploadBufferToCloudinary(buffer, area) {
 }
 
 // POST /api/photos  (multipart/form-data: photo=<file>, area=<string>)
-router.post("/", upload.single("photo"), async (req, res) => {
+router.post("/", requireAdmin, upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded (field name must be 'photo')" });
     const area = req.body.area || "";
@@ -58,7 +59,7 @@ router.post("/", upload.single("photo"), async (req, res) => {
 // PATCH /api/photos/:publicId(*)  (JSON body: { area?, kind? }) — retag a photo.
 // Written straight to the database for the same reason as POST: a client's
 // general /api/state save can no longer carry photos edits (see /api/state).
-router.patch("/*", async (req, res) => {
+router.patch("/*", requireAdmin, async (req, res) => {
   try {
     const publicId = req.params[0];
     if (!publicId) return res.status(400).json({ error: "Missing photo id" });
@@ -80,7 +81,7 @@ router.patch("/*", async (req, res) => {
 });
 
 // DELETE /api/photos/:publicId(*) — remove a photo from Cloudinary
-router.delete("/*", async (req, res) => {
+router.delete("/*", requireAdmin, async (req, res) => {
   try {
     const publicId = req.params[0];
     if (!publicId) return res.status(400).json({ error: "Missing photo id" });

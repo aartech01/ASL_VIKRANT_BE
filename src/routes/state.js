@@ -1,6 +1,7 @@
 const express = require("express");
 const Project = require("../models/Project");
 const { PROJECT_ID } = require("../constants");
+const requireAdmin = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.get("/", async (req, res) => {
 });
 
 // PUT /api/state — overwrite the shared dashboard state
-router.put("/", async (req, res) => {
+router.put("/", requireAdmin, async (req, res) => {
   try {
     const { state, updatedBy } = req.body || {};
     if (!state || typeof state !== "object") {
