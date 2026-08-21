@@ -34,7 +34,9 @@ function uploadBufferToCloudinary(buffer, area) {
 }
 
 // POST /api/photos  (multipart/form-data: photo=<file>, area=<string>)
-router.post("/", requireAdmin, upload.single("photo"), async (req, res) => {
+// Open to any visitor — the Photos tab is meant for the whole site team to
+// upload and tag survey photos, not just the admin key holder.
+router.post("/", upload.single("photo"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded (field name must be 'photo')" });
     const area = req.body.area || "";
@@ -59,7 +61,7 @@ router.post("/", requireAdmin, upload.single("photo"), async (req, res) => {
 // PATCH /api/photos/:publicId(*)  (JSON body: { area?, kind? }) — retag a photo.
 // Written straight to the database for the same reason as POST: a client's
 // general /api/state save can no longer carry photos edits (see /api/state).
-router.patch("/*", requireAdmin, async (req, res) => {
+router.patch("/*", async (req, res) => {
   try {
     const publicId = req.params[0];
     if (!publicId) return res.status(400).json({ error: "Missing photo id" });
