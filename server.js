@@ -6,6 +6,7 @@ const { connectDB } = require("./src/db");
 const stateRoutes = require("./src/routes/state");
 const photoRoutes = require("./src/routes/photos");
 const sitemapRoutes = require("./src/routes/sitemap");
+const quoteRoutes = require("./src/routes/quotes");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -31,6 +32,7 @@ app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISO
 app.use("/api/state", stateRoutes);
 app.use("/api/photos", photoRoutes);
 app.use("/api/sitemap", sitemapRoutes);
+app.use("/api/quotes", quoteRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
