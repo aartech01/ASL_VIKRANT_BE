@@ -90,7 +90,17 @@ router.get("/oauth2callback", async (req, res) => {
       { refreshToken: tokens.refresh_token },
       { upsert: true }
     );
-    res.send("Google Chat connected. You can close this tab and go back to Vikrant.");
+    const grantedScopes = (tokens.scope || "(none reported)").split(" ").join("\n");
+    const hasSheets = (tokens.scope || "").includes("spreadsheets");
+    res.type("text/plain").send(
+      "Google connected. Granted permissions:\n\n" + grantedScopes + "\n\n" +
+      (hasSheets
+        ? "Spreadsheet access: YES — Sync from Sheet should work now."
+        : "Spreadsheet access: NO — this consent did not include it. " +
+          "Try revoking access at https://myaccount.google.com/permissions (find this app and remove it), " +
+          "then use the connect link again so Google shows the full permission list.") +
+      "\n\nYou can close this tab and go back to Vikrant."
+    );
   } catch (err) {
     console.error("GET /api/chat-sync/oauth2callback failed:", err.message);
     res.status(500).send("OAuth exchange failed: " + err.message);
