@@ -111,8 +111,9 @@ router.get("/preview", requireAdmin, async (req, res) => {
     res.json({ candidates, sheetTab: tab });
   } catch (err) {
     if (err.code === "NOT_CONNECTED") return res.status(409).json({ error: err.message });
-    console.error("GET /api/expense-sync/preview failed:", err.message);
-    res.status(500).json({ error: "Could not read the spreadsheet" });
+    const detail = (err.errors && err.errors[0] && err.errors[0].message) || err.message;
+    console.error("GET /api/expense-sync/preview failed:", detail);
+    res.status(500).json({ error: "Could not read the spreadsheet: " + detail });
   }
 });
 
