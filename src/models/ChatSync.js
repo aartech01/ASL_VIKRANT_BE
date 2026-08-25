@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
 
 /*
- * Singleton document (like Project) holding everything the Chat-sync feature
- * needs across requests: the OAuth refresh token for the Google account that
- * is a member of the site's Chat space, which space to read, and which
- * messages have already been reviewed so re-running preview doesn't
- * re-surface the same items.
+ * Singleton document (like Project) holding everything the Google-sync
+ * features need across requests: one OAuth refresh token shared by both
+ * Chat sync and Sheet sync (same account, different scopes/APIs), which
+ * Chat space and which spreadsheet to read, and which items from each have
+ * already been reviewed so re-running preview doesn't re-surface them.
  */
 const ChatSyncSchema = new mongoose.Schema(
   {
@@ -15,6 +15,9 @@ const ChatSyncSchema = new mongoose.Schema(
     spaceDisplayName: { type: String, default: null },
     lastSyncedMessageTime: { type: Date, default: null },
     seenMessageIds: { type: [String], default: [] },
+    sheetId: { type: String, default: "19Cm-dQ9ObyE7ICfe6TPWBPbIQ0cjPdbg" }, // ASL Unit-3 A-147.xlsx
+    sheetTab: { type: String, default: "Expenses Sheet" },
+    seenExpenseKeys: { type: [String], default: [] },
   },
   { timestamps: true, _id: false }
 );

@@ -4,30 +4,12 @@ const Project = require("../models/Project");
 const ChatSync = require("../models/ChatSync");
 const { PROJECT_ID } = require("../constants");
 const requireAdmin = require("../middleware/requireAdmin");
+const { SCOPES, SYNC_ID: CHAT_SYNC_ID, oauthClient, authedClient } = require("../services/googleAuth");
 
 const router = express.Router();
-const CHAT_SYNC_ID = "vikrant-unit3-chat";
-
-const SCOPES = [
-  "https://www.googleapis.com/auth/chat.messages.readonly",
-  "https://www.googleapis.com/auth/chat.spaces.readonly",
-];
-
-function oauthClient() {
-  return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_OAUTH_REDIRECT_URI
-  );
-}
 
 async function chatClientForSavedAccount() {
-  const sync = await ChatSync.findById(CHAT_SYNC_ID).lean();
-  if (!sync || !sync.refreshToken) {
-    throw Object.assign(new Error("Google Chat is not connected yet"), { code: "NOT_CONNECTED" });
-  }
-  const client = oauthClient();
-  client.setCredentials({ refresh_token: sync.refreshToken });
+  const { client, sync } = await authedClient();
   return { chat: google.chat({ version: "v1", auth: client }), sync };
 }
 
