@@ -1,5 +1,6 @@
 const express = require("express");
 const { google } = require("googleapis");
+const XLSX = require("xlsx");
 const Project = require("../models/Project");
 const ChatSync = require("../models/ChatSync");
 const { PROJECT_ID } = require("../constants");
@@ -80,19 +81,41 @@ router.post("/sheet", requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Reads the data rows (below the header) out of the named tab, whichever way
+// the file actually lives in Drive. A file uploaded as .xlsx and never
+// converted keeps mimeType application/vnd.openxmlformats-... — the Sheets
+// API's values.get only understands native Google Sheets, so that case has
+// to go through Drive's raw file download instead and get parsed locally.
+// See: ASL Unit-3 A-147.xlsx is exactly this case (uploaded, never converted).
+async function readTabRows(client, fileId, tab) {
+  const drive = google.drive({ version: "v3", auth: client });
+  const meta = await drive.files.get({ fileId, fields: "mimeType" });
+  if (meta.data.mimeType === "application/vnd.google-apps.spreadsheet") {
+    const sheets = google.sheets({ version: "v4", auth: client });
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: fileId,
+      range: `'${tab}'!A2:K5000`,
+    });
+    return (data.values || []).filter((r) => r.some((c) => c && String(c).trim()));
+  }
+  const fileRes = await drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+  const workbook = XLSX.read(Buffer.from(fileRes.data), { type: "buffer" });
+  const sheet = workbook.Sheets[tab];
+  if (!sheet) {
+    throw new Error(`Tab "${tab}" not found in the spreadsheet (found: ${workbook.SheetNames.join(", ")})`);
+  }
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+  return rows.slice(1).filter((r) => r.some((c) => c && String(c).trim()));
+}
+
 // GET /api/expense-sync/preview — every sheet row not already synced or
 // already matching something in Vikrant. Reads only; nothing is written.
 router.get("/preview", requireAdmin, async (req, res) => {
   try {
     const { client, sync } = await authedClient();
     const sheetId = sync.sheetId || DEFAULT_SHEET_ID;
-    const sheets = google.sheets({ version: "v4", auth: client });
     const tab = sync.sheetTab || DEFAULT_SHEET_TAB;
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `'${tab}'!A2:K5000`,
-    });
-    const rows = (data.values || []).filter((r) => r.some((c) => c && String(c).trim()));
+    const rows = await readTabRows(client, sheetId, tab);
 
     const seen = new Set(sync.seenExpenseKeys || []);
     const projectDoc = await Project.findById(PROJECT_ID).lean();

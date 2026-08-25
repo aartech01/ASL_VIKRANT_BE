@@ -12,6 +12,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/chat.messages.readonly",
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/spreadsheets.readonly",
+  // Needed because the expense spreadsheet is an uploaded .xlsx file, never
+  // converted to a native Google Sheet — reading it means downloading the raw
+  // file via Drive, which spreadsheets.readonly alone doesn't cover.
+  "https://www.googleapis.com/auth/drive.readonly",
 ];
 const SYNC_ID = "vikrant-unit3-chat"; // matches the id chatSync.js already uses in production
 
