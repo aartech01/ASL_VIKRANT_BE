@@ -8,6 +8,13 @@ const { SYNC_ID, authedClient } = require("../services/googleAuth");
 
 const router = express.Router();
 
+// Fallback when the saved sync doc predates these fields (Mongoose schema
+// defaults only apply to documents created after the field was added — an
+// already-existing doc just reads back as undefined, not the new default).
+// ASL Unit-3 A-147.xlsx, "Expenses Sheet" tab.
+const DEFAULT_SHEET_ID = "19Cm-dQ9ObyE7ICfe6TPWBPbIQ0cjPdbg";
+const DEFAULT_SHEET_TAB = "Expenses Sheet";
+
 // Column order in the "Expenses Sheet" tab, A onward — see ASL Unit-3 A-147.xlsx.
 const COLS = ["date", "voucherNo", "classification", "ledger", "partyName",
   "invoiceNo", "invoiceDate", "desc", "amount", "gst", "total"];
@@ -56,8 +63,8 @@ router.get("/status", requireAdmin, async (req, res) => {
   const sync = await ChatSync.findById(SYNC_ID).lean();
   res.json({
     connected: !!(sync && sync.refreshToken),
-    sheetId: (sync && sync.sheetId) || null,
-    sheetTab: (sync && sync.sheetTab) || null,
+    sheetId: (sync && sync.sheetId) || DEFAULT_SHEET_ID,
+    sheetTab: (sync && sync.sheetTab) || DEFAULT_SHEET_TAB,
   });
 });
 
@@ -78,13 +85,11 @@ router.post("/sheet", requireAdmin, async (req, res) => {
 router.get("/preview", requireAdmin, async (req, res) => {
   try {
     const { client, sync } = await authedClient();
-    if (!sync.sheetId) {
-      return res.status(409).json({ error: "No spreadsheet configured yet" });
-    }
+    const sheetId = sync.sheetId || DEFAULT_SHEET_ID;
     const sheets = google.sheets({ version: "v4", auth: client });
-    const tab = sync.sheetTab || "Expenses Sheet";
+    const tab = sync.sheetTab || DEFAULT_SHEET_TAB;
     const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: sync.sheetId,
+      spreadsheetId: sheetId,
       range: `'${tab}'!A2:K5000`,
     });
     const rows = (data.values || []).filter((r) => r.some((c) => c && String(c).trim()));
