@@ -34,7 +34,8 @@ router.put("/", requireAdmin, async (req, res) => {
     // /api/photos or the Chat photo import in between be silently wiped.
     const set = { updatedBy: updatedBy || "" };
     Object.keys(state).forEach((k) => {
-      if (k !== "photos" && k !== "siteMap" && !k.includes(".") && !k.startsWith("$")) set["state." + k] = state[k];
+      // chatQuotes is owned by /api/chat-quotes, like photos by /api/photos
+      if (k !== "photos" && k !== "siteMap" && k !== "chatQuotes" && !k.includes(".") && !k.startsWith("$")) set["state." + k] = state[k];
     });
     const doc = await Project.findByIdAndUpdate(PROJECT_ID, { $set: set }, { upsert: true, new: true });
     res.json({ ok: true, updatedAt: doc.updatedAt });
