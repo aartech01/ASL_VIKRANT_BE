@@ -39,7 +39,7 @@ const isQuoteText = (s) => QUOTE_RE.test(s || "") || PI_RE.test(s || "");
 const fileId = (key) => "q_" + String(key).replace(/^spaces\//, "").replace(/[^A-Za-z0-9_-]+/g, "_");
 
 // Words that look like names after "by"/"from" or before "quote" but are never a vendor
-const NOT_VENDOR = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|the|this|that|these|those|our|your|his|her|their|all|any|pls|please|ok|shed|sheds|shutters?|civil|flooring|painting|electrical|bis|pi|boq|bom|team|site|vendor|vendors|final|revised|new|latest|attached)$/i;
+const NOT_VENDOR = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|the|this|that|these|those|our|your|his|her|their|all|any|pls|please|ok|shed|sheds|shutters?|civil|flooring|painting|electrical|bis|pi|boq|bom|team|site|vendor|vendors|final|revised|new|latest|attached|fees|fee|proposal|commercial|regarding|re|kind|dear|sir|madam|hi|hello)$/i;
 const vendorOk = (s) => !!s && s.length <= 40 && !NOT_VENDOR.test(s.split(/\s+/)[0]) && /[a-z]/i.test(s);
 // "@Sohail Hussain (SSH)" mentions are people on the team, not vendors
 const stripMentions = (t) => String(t || "").replace(/@[A-Z][\w.']*(?:\s+[A-Z][\w.']*){0,3}\s*(?:\([A-Z]{2,5}\))?/g, " ");
@@ -49,9 +49,10 @@ const stripMentions = (t) => String(t || "").replace(/@[A-Z][\w.']*(?:\s+[A-Z][\
 function guessVendor(text, fileNames) {
   const t = stripMentions(text);
   const tries = [
-    t.match(/\bm\/s\.?\s*([A-Za-z][\w&.\-]*(?:\s+[A-Za-z][\w&.\-]*){0,3})/i),
-    t.match(/\bfrom\s+([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})/),
-    t.match(/([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})\s+(?:[Qq]uot\w*|[Oo]ffer|[Pp]roforma|[Ee]stimate|PI)\b/),
+    // name words are joined by spaces only — never across a line break
+    t.match(/\bm\/s\.?[ \t]*([A-Za-z][\w&.\-]*(?:[ \t]+[A-Za-z][\w&.\-]*){0,3})/i),
+    t.match(/\bfrom[ \t]+([A-Z][\w&.\-]*(?:[ \t]+[A-Z][\w&.\-]*){0,3})/),
+    t.match(/([A-Z][\w&.\-]*(?:[ \t]+[A-Z][\w&.\-]*){0,3})[ \t]+(?:[Qq]uot\w*|[Oo]ffer|[Pp]roforma|[Ee]stimate|PI)\b/),
   ];
   // "Bhopal Shutter Works Rs 18,500" → drop a trailing currency word picked up with the name
   const tidy = (s) => s.trim().replace(/(\s+(rs\.?|inr|for|and|dated|dt\.?))+$/i, "").trim();
