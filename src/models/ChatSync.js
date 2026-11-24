@@ -18,6 +18,11 @@ const ChatSyncSchema = new mongoose.Schema(
     sheetId: { type: String, default: "19Cm-dQ9ObyE7ICfe6TPWBPbIQ0cjPdbg" }, // ASL Unit-3 A-147.xlsx
     sheetTab: { type: String, default: "Expenses Sheet" },
     seenExpenseKeys: { type: [String], default: [] },
+    // Chat photo import (routes/chatPhotos.js)
+    photoSpaceId: { type: String, default: null }, // defaults to spaces/AAQAdEiPJJU in the route
+    photosSyncedUntil: { type: Date, default: null },
+    photosLastRunAt: { type: Date, default: null },
+    importedPhotoKeys: { type: [String], default: [] }, // Chat attachment resource names already imported
   },
   { timestamps: true, _id: false }
 );
