@@ -99,7 +99,7 @@ router.post("/sync", async (req, res) => {
     const chat = google.chat({ version: "v1", auth: client });
     const drive = google.drive({ version: "v3", auth: client });
     const space = sync.photoSpaceId || DEFAULT_SPACE;
-    const done = new Set(sync.importedPhotoKeys || []);
+    const done = new Set([...(sync.importedPhotoKeys || []), ...(sync.skippedPhotoKeys || [])]);
     const since = sync.photosSyncedUntil ? new Date(new Date(sync.photosSyncedUntil).getTime() - OVERLAP_MS) : null;
 
     // 1. find every image attachment in the room not yet imported (oldest first)
@@ -128,6 +128,7 @@ router.post("/sync", async (req, res) => {
     const batch = pending.slice(0, MAX_PER_CALL);
     const imported = [];
     const failed = [];
+    let skipped = 0;
     for (const { m, a } of batch) {
       try {
         const buf = await download(chat, drive, a);
@@ -154,16 +155,24 @@ router.post("/sync", async (req, res) => {
       } catch (e) {
         console.error("chat photo import failed for", a.name, e.message);
         failed.push({ name: a.contentName || a.name, error: e.message });
+        // A file Cloudinary rejects as not-an-image (e.g. a .dwg posted with an image
+        // type) will never succeed — remember it so it isn't retried on every run.
+        // Network/Google errors are left out of this so they are retried next time.
+        const http = e.http_code || (e.error && e.error.http_code);
+        if (/invalid image|unsupported|too large/i.test(e.message || "") || (http >= 400 && http < 500)) {
+          await ChatSync.updateOne({ _id: SYNC_ID }, { $addToSet: { skippedPhotoKeys: a.name } });
+          skipped++;
+        }
       }
     }
 
     // 3. advance the scan cursor only once everything up to `newest` is in
-    const remaining = pending.length - imported.length;
+    const remaining = pending.length - imported.length - skipped;
     const update = { photosLastRunAt: new Date(), photoSpaceId: space };
     if (remaining === 0 && newest) update.photosSyncedUntil = newest;
     await ChatSync.updateOne({ _id: SYNC_ID }, { $set: update });
 
-    res.json({ imported: imported.length, remaining, failed, totalImported: done.size + imported.length });
+    res.json({ imported: imported.length, remaining, failed, totalImported: (sync.importedPhotoKeys || []).length + imported.length });
   } catch (err) {
     if (err.code === "NOT_CONNECTED") return res.status(409).json({ error: "Google is not connected yet — an admin must click Reconnect Google once" });
     const detail = (err.response && err.response.data && err.response.data.error && err.response.data.error.message) || err.message;
