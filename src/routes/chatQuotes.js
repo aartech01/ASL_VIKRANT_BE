@@ -38,21 +38,35 @@ let running = false;
 const isQuoteText = (s) => QUOTE_RE.test(s || "") || PI_RE.test(s || "");
 const fileId = (key) => "q_" + String(key).replace(/^spaces\//, "").replace(/[^A-Za-z0-9_-]+/g, "_");
 
-// "Emkay India offer.pdf" → "Emkay India"; "quotation from Akshat Enterprises" → "Akshat Enterprises"
+// Words that look like names after "by"/"from" or before "quote" but are never a vendor
+const NOT_VENDOR = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|the|this|that|these|those|our|your|his|her|their|all|any|pls|please|ok|shed|sheds|shutters?|civil|flooring|painting|electrical|bis|pi|boq|bom|team|site|vendor|vendors|final|revised|new|latest|attached)$/i;
+const vendorOk = (s) => !!s && s.length <= 40 && !NOT_VENDOR.test(s.split(/\s+/)[0]) && /[a-z]/i.test(s);
+// "@Sohail Hussain (SSH)" mentions are people on the team, not vendors
+const stripMentions = (t) => String(t || "").replace(/@[A-Z][\w.']*(?:\s+[A-Z][\w.']*){0,3}\s*(?:\([A-Z]{2,5}\))?/g, " ");
+
+// "Emkay India Offer" → "Emkay India"; "quotes 65K - from Anees Fabricators" → "Anees Fabricators";
+// "Akshat Enterprises quotation.xlsx" → "Akshat Enterprises". Empty when unsure.
 function guessVendor(text, fileNames) {
-  const t = String(text || "");
-  let m = t.match(/(?:from|by|of)\s+(?:m\/s\.?\s*)?([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})/);
-  if (m) return m[1].trim();
-  m = t.match(/(?:m\/s\.?\s*)([A-Za-z][\w&.\-]*(?:\s+[A-Za-z][\w&.\-]*){0,3})/i);
-  if (m) return m[1].trim();
+  const t = stripMentions(text);
+  const tries = [
+    t.match(/\bm\/s\.?\s*([A-Za-z][\w&.\-]*(?:\s+[A-Za-z][\w&.\-]*){0,3})/i),
+    t.match(/\bfrom\s+([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})/),
+    t.match(/([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})\s+(?:[Qq]uot\w*|[Oo]ffer|[Pp]roforma|[Ee]stimate|PI)\b/),
+  ];
+  // "Bhopal Shutter Works Rs 18,500" → drop a trailing currency word picked up with the name
+  const tidy = (s) => s.trim().replace(/(\s+(rs\.?|inr|for|and|dated|dt\.?))+$/i, "").trim();
+  for (const m of tries) if (m && vendorOk(tidy(m[1]))) return tidy(m[1]);
   for (const f of fileNames) {
     const base = String(f).replace(/\.[a-z0-9]+$/i, "").replace(/[_]+/g, " ");
-    m = base.match(/^(.*?)\s*[-–(]?\s*(quot|qtn|offer|proforma|estimate|pi\b)/i);
-    if (m && m[1] && /[a-z]/i.test(m[1]) && m[1].length <= 40) return m[1].replace(/[-–(]+$/, "").trim();
+    const m = base.match(/^(.*?)\s*[-–(]?\s*(quot|qtn|offer|proforma|estimate|pi\b)/i);
+    const name = m && m[1] ? m[1].replace(/[-–(]+$/, "").trim() : "";
+    if (vendorOk(name)) return name;
   }
-  m = t.match(/([A-Z][\w&.\-]*(?:\s+[A-Z][\w&.\-]*){0,3})\s+(?:quot|offer|proforma|estimate)/);
-  return m ? m[1].trim() : "";
+  return "";
 }
+// A real quotation carries a file or states an amount; chat *about* quotes ("can we close
+// civil quotations today?") is left out.
+const isRealQuote = (fileCount, amount) => fileCount > 0 || !!amount;
 
 // "Rs 65K", "₹27,000", "INR 1.2 lakh" → number (first amount mentioned)
 function extractAmount(text) {
@@ -100,8 +114,24 @@ router.post("/sync", async (req, res) => {
     const space = sync.photoSpaceId || DEFAULT_SPACE;
 
     const doc = await Project.findById(PROJECT_ID, { "state.chatQuotes": 1 }).lean();
-    const have = new Set(((doc && doc.state && doc.state.chatQuotes) || []).map((q) => q.id));
-    const since = sync.quotesSyncedUntil ? new Date(new Date(sync.quotesSyncedUntil).getTime() - OVERLAP_MS) : null;
+    let existing = (doc && doc.state && doc.state.chatQuotes) || [];
+    // Tidy records still waiting for review: drop chat that isn't a real quotation and
+    // refresh vendor guesses. Anything already added or dismissed is left exactly as it is.
+    const prune = existing.filter((q) => (q.status || "new") === "new" && !isRealQuote((q.files || []).length, q.amount)).map((q) => q.id);
+    if (prune.length) {
+      await Project.updateOne({ _id: PROJECT_ID }, { $pull: { "state.chatQuotes": { id: { $in: prune } } } });
+      existing = existing.filter((q) => !prune.includes(q.id));
+    }
+    for (const q of existing) {
+      if ((q.status || "new") !== "new") continue;
+      const g = guessVendor(q.text, (q.files || []).map((f) => f.name));
+      if (g !== (q.vendorGuess || "")) {
+        await Project.updateOne({ _id: PROJECT_ID, "state.chatQuotes.id": q.id }, { $set: { "state.chatQuotes.$.vendorGuess": g } });
+      }
+    }
+    const have = new Set(existing.map((q) => q.id));
+    const forceFull = !!prune.length; // re-scan once so nothing filtered under the old rule is missed
+    const since = sync.quotesSyncedUntil && !forceFull ? new Date(new Date(sync.quotesSyncedUntil).getTime() - OVERLAP_MS) : null;
 
     const pending = [];
     let newest = null, pageToken;
@@ -116,6 +146,7 @@ router.post("/sync", async (req, res) => {
         const atts = (m.attachment || []).filter((a) => FILE_RE.test(a.contentType || ""));
         const names = atts.map((a) => a.contentName || "");
         if (!isQuoteText(m.text) && !names.some(isQuoteText)) return; // not about a quotation
+        if (!isRealQuote(atts.length, extractAmount(m.text))) return;   // talk about quotes, not a quote
         pending.push({ m, atts });
       });
       pageToken = data.nextPageToken;
