@@ -29,14 +29,14 @@ router.put("/", requireAdmin, async (req, res) => {
     // its own (possibly outdated) photos list, it could silently wipe out photos
     // another session just uploaded. So this route never lets the client overwrite
     // that field — it always keeps whatever is already stored.
-    const existing = await Project.findById(PROJECT_ID).lean();
-    state.photos = (existing && existing.state && existing.state.photos) || [];
-    state.siteMap = (existing && existing.state && existing.state.siteMap) || null;
-    const doc = await Project.findByIdAndUpdate(
-      PROJECT_ID,
-      { state, updatedBy: updatedBy || "" },
-      { upsert: true, new: true }
-    );
+    // Written as one atomic $set of every other top-level field, rather than
+    // read-then-overwrite: the old read/write gap let a photo pushed by
+    // /api/photos or the Chat photo import in between be silently wiped.
+    const set = { updatedBy: updatedBy || "" };
+    Object.keys(state).forEach((k) => {
+      if (k !== "photos" && k !== "siteMap" && !k.includes(".") && !k.startsWith("$")) set["state." + k] = state[k];
+    });
+    const doc = await Project.findByIdAndUpdate(PROJECT_ID, { $set: set }, { upsert: true, new: true });
     res.json({ ok: true, updatedAt: doc.updatedAt });
   } catch (err) {
     console.error("PUT /api/state failed:", err.message);

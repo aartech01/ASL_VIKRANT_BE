@@ -99,8 +99,16 @@ router.post("/sync", async (req, res) => {
     const chat = google.chat({ version: "v1", auth: client });
     const drive = google.drive({ version: "v3", auth: client });
     const space = sync.photoSpaceId || DEFAULT_SPACE;
-    const done = new Set([...(sync.importedPhotoKeys || []), ...(sync.skippedPhotoKeys || [])]);
-    const since = sync.photosSyncedUntil ? new Date(new Date(sync.photosSyncedUntil).getTime() - OVERLAP_MS) : null;
+    // "Done" = actually present in the dashboard, or deliberately skipped/deleted.
+    // Checking presence (not just "was imported once") means a photo that went
+    // missing is restored on the next run instead of being lost for good.
+    const projectDoc = await Project.findById(PROJECT_ID, { "state.photos": 1 }).lean();
+    const present = ((projectDoc && projectDoc.state && projectDoc.state.photos) || [])
+      .map((p) => p.chatAttachment).filter(Boolean);
+    const done = new Set([...present, ...(sync.skippedPhotoKeys || [])]);
+    // Full scan when anything recorded as imported is missing, so it can be restored.
+    const missing = (sync.importedPhotoKeys || []).some((k) => !present.includes(k) && !(sync.skippedPhotoKeys || []).includes(k));
+    const since = sync.photosSyncedUntil && !missing ? new Date(new Date(sync.photosSyncedUntil).getTime() - OVERLAP_MS) : null;
 
     // 1. find every image attachment in the room not yet imported (oldest first)
     const pending = [];

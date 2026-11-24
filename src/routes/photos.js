@@ -5,6 +5,8 @@ const cloudinary = require("../cloudinary");
 const Project = require("../models/Project");
 const { PROJECT_ID } = require("../constants");
 const requireAdmin = require("../middleware/requireAdmin");
+const ChatSync = require("../models/ChatSync");
+const { SYNC_ID } = require("../services/googleAuth");
 
 const router = express.Router();
 
@@ -87,6 +89,12 @@ router.delete("/*", requireAdmin, async (req, res) => {
   try {
     const publicId = req.params[0];
     if (!publicId) return res.status(400).json({ error: "Missing photo id" });
+    // A Chat photo deleted on purpose must not come back on the next Chat sync.
+    const doc = await Project.findById(PROJECT_ID, { "state.photos": 1 }).lean();
+    const photo = doc && doc.state && (doc.state.photos || []).find((p) => p.id === publicId);
+    if (photo && photo.chatAttachment) {
+      await ChatSync.updateOne({ _id: SYNC_ID }, { $addToSet: { skippedPhotoKeys: photo.chatAttachment } }, { upsert: true });
+    }
     await cloudinary.uploader.destroy(publicId);
     await Project.findByIdAndUpdate(PROJECT_ID, { $pull: { "state.photos": { id: publicId } } });
     res.json({ ok: true });
