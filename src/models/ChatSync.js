@@ -24,6 +24,9 @@ const ChatSyncSchema = new mongoose.Schema(
     photosLastRunAt: { type: Date, default: null },
     importedPhotoKeys: { type: [String], default: [] }, // Chat attachment resource names already imported
     skippedPhotoKeys: { type: [String], default: [] }, // attachments that can never import (not a real image)
+    // Chat vendor-quote import (routes/chatQuotes.js)
+    quotesSyncedUntil: { type: Date, default: null },
+    quotesLastRunAt: { type: Date, default: null },
   },
   { timestamps: true, _id: false }
 );

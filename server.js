@@ -10,6 +10,7 @@ const quoteRoutes = require("./src/routes/quotes");
 const chatSyncRoutes = require("./src/routes/chatSync");
 const expenseSyncRoutes = require("./src/routes/expenseSync");
 const chatPhotoRoutes = require("./src/routes/chatPhotos");
+const chatQuoteRoutes = require("./src/routes/chatQuotes");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -39,6 +40,7 @@ app.use("/api/quotes", quoteRoutes);
 app.use("/api/chat-sync", chatSyncRoutes);
 app.use("/api/expense-sync", expenseSyncRoutes);
 app.use("/api/chat-photos", chatPhotoRoutes);
+app.use("/api/chat-quotes", chatQuoteRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
